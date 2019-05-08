@@ -1,0 +1,966 @@
+{% extends 'assignments/assignments_base.html' %}
+{% load staticfiles %}
+{% load assignmentTags %}
+{% block css %}
+{{ block.super }}
+<link rel="stylesheet" type="text/css" href="{% static 'bootstrap3-editable/css/bootstrap-editable.css' %}">
+<link rel="stylesheet" href="{% static 'datatables/css/dataTables.bootstrap.css' %}">
+{% endblock %}
+{% block javascript %}
+{{ block.super }}
+<script type="text/javascript" src="{% static 'bootstrap3-editable/js/bootstrap-editable.js' %}"></script>
+<script src="{% static 'datatables/js/jquery.dataTables.min.js' %}"></script>
+<script src="{% static 'datatables/js/datatables.js' %}"></script>
+<script type="text/javascript">
+    jQuery.extend(jQuery.fn.dataTableExt.oSort, {
+        "num-html-pre": function (a) {
+            var x = String(a).replace(/<[\s\S]*?>/g, "");
+            return parseFloat(x);
+        },
+
+        "num-html-asc": function (a, b) {
+            return ((a < b) ? -1 : ((a > b) ? 1 : 0));
+        },
+
+        "num-html-desc": function (a, b) {
+            return ((a < b) ? 1 : ((a > b) ? -1 : 0));
+        }
+    });
+    $.fn.editable.defaults.mode = 'inline';
+    $(document).ready(function () {
+        $('.marks').editable({
+        });
+        var datatable = $('#TestCaseTable').dataTable({
+            "bStateSave": true,
+            "bPaginate": false,
+            "bFilter": false,
+            "fnStateSave": function (oSettings, oData) {
+                localStorage.setItem('DataTables', JSON.stringify(oData));
+            },
+            "fnStateLoad": function (oSettings) {
+                return JSON.parse(localStorage.getItem('DataTables'));
+            },
+            "fnStateSaveParams": function (oSettings, oData) {
+                oData.oSearch.sSearch = "";
+            },
+            "stateDuration": 7200,
+            "aoColumnDefs": [
+                { "aTargets": [0], "bSortable": true, },
+                { "aTargets": [1], "bSortable": true, },
+                { "aTargets": [2], "bSortable": true, },
+                { "aTargets": [3], "bSortable": true, },
+                { "aTargets": ['_all'], "bSortable": false, }
+            ]
+        });
+        $('#upfile').click(function (e) {
+            $('#userinput').html('<label for="infile"><h4>Select a file to upload.</h4></label>\
+                    <input id="infile" name="inputFile" type="file"/>');
+            return false;
+        });
+        $('#uptext').click(function (e) {
+            $('#userinput').html('<label for="txtarea"><h4>Enter your input here to check output.</h4></label>\
+                    <textarea id="txtarea" name="inputText" placeholder="Type your input here."\
+                    rows="5" cols="30"></textarea><br/>');
+            return false;
+        });
+    });
+
+</script>
+{% endblock %}
+
+{% block title %}Assignment Section Details {% endblock %}
+{% block sidebar %}
+<input type="hidden" value="{{ program.assignment.id }}" id="asgn_id" />
+<input type="hidden" value="{{ program.id }}" id="prog_id" />
+{{ block.super }}
+<script>
+    $(document).ready(function () {
+        $('#left').animate({
+            scrollTop: $("#prog_id-" + "{{ programID }}").offset().top - 80
+        }, 0);
+    });
+</script>
+{% endblock %}
+
+{% block main %}
+<div>
+    <ul class="breadcrumb">
+        <li><a href="/courseware/course/{{ program.assignment.course.id }}/exams/">
+                {{ program.assignment.course.title }}
+            </a> <span class="divider">/</span></li>
+        <div class="dropdown">
+            <li><a href="{% url 'assignments_details' program.assignment.id %}" class="dropbtn">
+                    {{ program.assignment.name}}</a>
+                <div class="dropdown-content">
+                    {% if assignments %}{% for asgnmnt in assignments %}
+                    {% if asgnmnt.name != program.assignment.name %}
+                    <a id="assignment-{{ asgnmnt.id }}"
+                    class="list-group-item {% if date_time >= asgnmnt.deadline %} list-group-item-danger {% endif %}"
+                        href="{% url 'assignments_details' asgnmnt.id %}">
+                        <span data-toggle="collapse" data-parent="#menu-group-1" href="#a{{ asgnmnt.id }}"
+                        class="sign  active">
+                        </span>
+                        <span>{{ asgnmnt.name }}</span>
+                        <input type="hidden" class="asgnid" value="{{ asgnmnt.id }}" />
+                        <input type="hidden" class="loaded-programs" value="0" />
+                    </a>
+                    {% endif %}
+                    {% endfor %}
+                    {% else %}
+                    <a class="list-group-item">No other assignments for this course </a>
+                    {% endif %}
+                </div>
+                <span class="divider">/</span>
+            </li>
+        </div>
+
+        <div class="dropdown">
+            <li><a href="{% url 'assignments_detailsprogram' program.id %}" class="dropbtn active">
+                    {{ program.name}}</a>
+                <div class="dropdown-content">
+                    {% if programs %}{% for prgrm in programs %}
+                    {% if prgrm.name != program.name %}
+                    <a id="assignment-{{ prgrm.id }}" class="list-group-item"
+                    href="{% url 'assignments_detailsprogram' prgrm.id %}">
+                        <span data-toggle="collapse" data-parent="#menu-group-1" href="#a{{ prgrm.assignment.id }}"
+                            class="sign  active">
+                        </span>
+                        <span>{{ prgrm.name }}</span>
+                        <input type="hidden" class="asgnid" value="{{ prgrm.assignment.id }}" />
+                        <input type="hidden" class="loaded-programs" value="0" />
+                    </a>
+                    {% endif %}
+                    {% endfor %}
+                    {% else %}
+                    <a class="list-group-item">No other sections for this assignment </a>
+                    {% endif %}
+                </div>
+            </li>
+        </div>
+
+    </ul>
+</div>
+
+    {% if is_due %}
+        <div class="alert alert-danger">Assignment deadline is over.</div>
+    {% endif %}
+
+{% if is_moderator and not mode == 'S' %}
+{% if not testcases %}
+<div class="alert alert-warning">
+    This Section does not have any test case. Please
+    <a href="{% url 'assignments_createtestcase' program.id %}">Add</a> at-least one test case.
+</div>
+{% endif %}
+
+{% if not program.is_sane and program_errors %}
+<div class="alert alert-danger">
+    This section has errors.<br>
+    {{ program_errors.error_message|linebreaksbr }}
+</div>
+{% endif %}
+
+{% if testcase_errors %}
+<div class="alert alert-danger">
+    There was an error in generating output file of
+    {% for t_error in testcase_errors %}
+    <a href="{% url 'assignments_detailstestcase' t_error.testcase.id %}">{{ t_error.testcase.name }} </a>
+    {% endfor %}
+    . Please check the errors and correct them.<br>
+</div>
+{% endif %}
+{% endif %}
+
+<style>
+    .form-group{
+    pointer-events: none;
+    }
+    #leftForm_asgnmnt {
+   float:left;
+   width:30%;
+   overflow:hidden;
+   }
+   #rightForm_asgnmnt {
+   float:right;
+   width:70%;
+   overflow:hidden;
+   }
+   input[type="text"]{
+   width: 100%;
+   border-radius: 6px;
+   display :inline-block;
+   border: 1px solid #ccc;
+   box-sizing: border-box;
+   pointer-events: none;
+   background-color: #f5f5f5
+   }
+   input[type="file"]{
+   width: 100%;
+   border-radius: 6px;
+   display :inline-block;
+   border: 1px solid #ccc;
+   box-sizing: border-box;
+   background-color: #f5f5f5
+   }
+   textarea{
+   width:100%;
+   border-radius: 6px;
+   display :inline-block;
+   border: 1px solid #ccc;
+   box-sizing: border-box;
+   background-color: #f5f5f5
+   }
+   .tab-content{
+   border-radius: 6px;
+   text-align: center;
+   border: 1px solid #ccc;
+   box-sizing: border-box;
+   }
+   .center{
+   text-align: center;
+   }
+   .checkbox{
+   margin-left: 10px;
+   pointer-events: none;
+   }
+   form{
+   margin-left: 10px
+   }
+   td{
+   text-align:center;
+   }
+   .alert{
+   padding: 0px;
+   margin-bottom: 0px
+   }
+   a{
+   text-decoration:none !important;
+   }
+   #id_compiler_command_0{
+       width: 20%
+   }
+   #id_compiler_command_1{
+       width: 30%
+   }
+   #id_compiler_command_2{
+       width: 50%
+   }
+    .info {
+    width: 150px;
+    }
+    .edit-icon {
+        background-image: url("{% static 'img/edit.png' %}");
+        background-repeat: no-repeat;
+    }
+    .delete-icon {
+        background-image: url("{% static 'img/remove.png' %}");
+        background-repeat: no-repeat;
+    }
+    {% if assignment.program_language != "Others" %}
+        .add-icon {
+            background-image: url("{% static 'img/add.png' %}");
+            background-repeat: no-repeat;
+        }
+    {% endif %}
+    .list-icon {
+        background-image: url("{% static 'img/list.png' %}");
+        background-repeat: no-repeat;
+    }
+    .stats-icon {
+        background-image: url("{% static 'img/stats.png' %}");
+        background-repeat: no-repeat;
+    }
+    .submission-icon {
+        background-image: url("{% static 'img/submission.png' %}");
+        background-repeat: no-repeat;
+    }
+    .crib-icon {
+        background-image: url("{% static 'img/crib.png' %}");
+        background-repeat: no-repeat;
+    }
+    /* The container <div> - needed to position the dropdown content */
+    .dropdown {
+        position: relative;
+        display: inline-block;
+    }
+    /* Dropdown Content (Hidden by Default) */
+    .dropdown-content {
+        display: none;
+        position: absolute;
+        background-color: #f1f1f1;
+        min-width: 160px;
+        max-height: 250px;
+        overflow-y: auto;
+        box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+        z-index: 1;
+    }
+    /* Links inside the dropdown */
+    .dropdown-content a {
+        color: black;
+        padding: 12px 16px;
+        text-decoration: none;
+        display: block;
+    }
+    /* Change color of dropdown links on hover */
+    .dropdown-content a:hover {background-color: #ddd;}
+    /* Show the dropdown menu on hover */
+    .dropdown:hover .dropdown-content {display: block;}
+    .glyphicon {
+        font-size: 16px;
+    }
+    </style>
+{% if is_moderator and not mode == 'S' %}
+<div class="course pull-right">
+    <a href="{% url 'assignments_createtestcase' program.id %}" data-toggle="tooltip" data-placement="top"
+    title="Add Testcase"><span style="cursor:pointer" class="glyphicon glyphicon-plus">&nbsp;</span></a>&nbsp;
+
+    <a href="{% url 'assignments_editprogram' program.id %}" data-toggle="tooltip" data-placement="top"
+    title="Edit Section"><span style="cursor:pointer" class="glyphicon glyphicon-edit">&nbsp;</span></a>&nbsp;
+
+    <a href="{% url 'assignments_removeprogram' program.id %}"
+    onclick="return confirm('Deleting this section will result in deleting all associated test-cases ' +
+                'and results thereof if any. \nDo you want to continue?')"
+        data-toggle="tooltip" data-placement="top" title="Delete Section">
+        <span style="cursor:pointer" class="glyphicon glyphicon-trash">&nbsp;</span></a>
+</div>
+<br />
+{% else %}
+<div class="pull-right">
+    <span style="cursor:pointer" class="edit-icon">&nbsp;&nbsp;&nbsp;&nbsp;</span>
+    <a href="{% url 'cribs_program_level' program.id %}">Cribs</a>&nbsp;
+    <span style="cursor:pointer" class="crib-icon">&nbsp;&nbsp;&nbsp;&nbsp;</span>
+    <a href="{% url 'announcements' assignment.id %}">Announcements</a>&nbsp;
+</div>
+<br />
+{% endif %}
+<div style="border: 1px solid #ccc;border-radius: 4px;">
+    <ul class="nav nav-tabs">
+        <li class="active" id="create_tab"><a data-toggle="tab" href="#basicDetails" onclick="getTab(1)">
+                Basic Details</a></li>
+        <li id="adv_tab"> <a data-toggle="tab" href="#advDetails" onclick="getTab(2)"> Advanced
+                Details</a></li>
+    </ul>
+    <div class="tab-content" style="background: #fff;border: none;">
+        <div id="basicDetails" class="tab-pane fade in active">
+            <div style="width: 90%;display:block;margin: auto;text-align: left;padding-top: 1%">
+                {% if formData.errors.items %}
+                <div class="alert alert-danger">
+                    The operation could not be performed because one or more error(s) occurred
+                </div>
+                {% endif%}
+
+                {% if formData.errors %}
+                <div class="alert alert-danger">
+                    <button type="button" class="close" data-dismiss="alert">x</button>
+                    {% for field in formData %}
+                    {% if field.errors %}
+                    <li><b>{{ field.label }} </b>: {{ field.errors|striptags }} </li>
+
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div>
+                    <input type="hidden" name="name_tabid" id="id_tab1" value="{{tabID}}">
+                </div>
+                <div class="form-group">
+                    {{formData.name.label_tag}}
+                    {{formData.name.errors|safe}}
+                    {{formData.name}}
+                </div>
+                <div class="form-group">
+                    {{formData.description.label_tag}}
+                    <br>
+                    {{formData.description.errors|safe}}{{formData.description}}
+                </div>
+                <div class="form-group">
+                    {{formData.program_type.label_tag}}
+                    {{formData.program_type.errors|safe}}{{formData.program_type}}
+                </div>
+                <div class="form-group">
+                    {{formData.compiler_command.label_tag}}<br />
+                    {{formData.compiler_command.errors|safe}}{{formData.compiler_command}}
+                    {{formData.compiler_command.help_text}}
+                </div>
+            </div>
+        </div>
+
+        <div id="advDetails" class="tab-pane fade">
+            <div style="width: 90%;display:block;margin: auto;text-align: left;padding-top: 1%">
+                {% if formData.errors.items %}
+                <div class="alert alert-danger">
+                    The operation could not be performed because one or more error(s) occurred
+                </div>
+                {% endif%}
+                {% if formData.errors %}
+                <div class="alert alert-danger">
+                    <button type="button" class="close" data-dismiss="alert">x</button>
+                    {% for field in formData %}
+                    {% if field.errors %}
+                    <li><b>{{ field.label }} </b>: {{ field.errors|striptags }} </li>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="form-group">
+                    {{formData.program_files.label_tag}}
+                    {{formData.program_files.errors|safe}}{{formData.program_files}}
+                    {{formData.program_files.help_text}}
+                </div>
+                <div class="form-group">
+                    {{formData.makefile.label_tag}}
+                    {{formData.makefile.errors|safe}}{{formData.makefile}}
+                    {{formData.makefile.help_text}}
+                </div>
+                <div class="form-group">
+                    {{formData.testcase_bulk_add.label_tag}}
+                    {{formData.testcase_bulk_add.errors|safe}}{{formData.testcase_bulk_add}}
+                    {{formData.testcase_bulk_add.help_text}}
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 10px;width: 80%;display:block;margin: auto;text-align: left;padding-bottom: 10px">
+            <input class="btn btn-large btn-info" type="submit" value="Create"
+            style="width: 20%;vertical-align: bottom;margin-left: 10px" />
+        </div>
+    </div>
+</div>
+<div>
+    <h3 align="center">Testcases</h3>
+    <script type="text/javascript">
+        function getCookie(c_name) {
+            if (document.cookie.length > 0) {
+                c_start = document.cookie.indexOf(c_name + "=");
+                if (c_start != -1) {
+                    c_start = c_start + c_name.length + 1;
+                    c_end = document.cookie.indexOf(";", c_start);
+                    if (c_end == -1) c_end = document.cookie.length;
+                    return unescape(document.cookie.substring(c_start, c_end));
+                }
+            }
+            return "";
+        }
+        function update(testid) {
+            $('#' + testid + '-inout').fadeOut();
+            return
+            file_content = {
+                update: 1,
+                testID: testid,
+                std_in: document.getElementById(testid + "-in").value,
+                std_out: document.getElementById(testid + "-out").value
+            }
+            $.ajaxSetup({
+                headers: {
+                    "X-CSRFToken": getCookie("csrftoken")
+                }
+            });
+            $.ajax({
+                type: "POST",
+                url: location.href,
+                data: file_content,
+                success: function (data) {
+                    document.getElementById(testid + "-in").value = data['stdin'];
+                    document.getElementById(testid + "-out").value = data['stdout'];
+                    $('#' + testid + '-inout').fadeIn();
+                }
+            });
+        }
+        function getstd(testid) {
+            if (!($('#' + testid + '-in')[0].hidden || $('#' + testid + '-in')[0].style.display == "none")) {
+                document.getElementById(testid + "-info").className = document.getElementById(testid +
+                    "-info").className.replace(" info", "")
+                $('#' + testid + '-in').fadeOut();
+                $('#' + testid + '-out').fadeOut();
+                $('#' + testid + '-linkin').fadeIn();
+                $('#' + testid + '-linkout').fadeIn();
+                $('#' + testid + '-in')[0].hidden = true;
+                $('#' + testid + '-out')[0].hidden = true;
+                return;
+            }
+            file_content = {
+                getstd: 1,
+                testID: testid,
+            }
+            $.ajaxSetup({
+                headers: {
+                    "X-CSRFToken": getCookie("csrftoken")
+                }
+            });
+            $.ajax({
+                type: "POST",
+                url: location.href,
+                data: file_content,
+                success: function (data) {
+                    if (data['fail'] == 'not allowed')
+                        return;
+                    document.getElementById(testid + "-info").className += " info"
+                    $('#' + testid + '-in')[0].value = data['stdin'];
+                    $('#' + testid + '-in')[0].hidden = false
+                    $('#' + testid + '-linkin').fadeOut();
+                    $('#' + testid + '-out')[0].value = data['stdout'];
+                    $('#' + testid + '-out')[0].hidden = false
+                    $('#' + testid + '-linkout').fadeOut();
+                    $('#' + testid + '-in').fadeIn();
+                    $('#' + testid + '-out').fadeIn();
+                }
+            });
+        }
+    </script>
+    <style>
+        .switch {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 34px;
+}
+
+.switch input {display:none;}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: #2196F3;
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px #2196F3;
+}
+
+input:checked + .slider:before {
+  -webkit-transform: translateX(26px);
+  -ms-transform: translateX(26px);
+  transform: translateX(26px);
+}
+
+/* Rounded sliders */
+.slider.round {
+  border-radius: 34px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+</style>
+    <div style="overflow-x: auto; min-width: 100%">
+        <table id="TestCaseTable" class="table table-striped datatable table-bordered" width="100%">
+            <thead>
+                <tr>
+                    <th> Testcase </th>
+                    <th> Input file </th>
+                    <th> Output file </th>
+                    <th> Marks </th>
+                    {% if is_moderator and not mode == 'S' %}
+                    <th> Edit </th>
+                    <th> Delete </th>
+                    {% endif %}
+                    {% if is_due or program.program_type == "Practice" %}
+                    <th>Dispaly I/O</th>
+                    {% elif is_moderator and not mode == 'S' %}
+                    <th>Display I/O</th>
+                    {% endif %}
+                    <th> View </th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for testcase in testcases %}
+                <tr id='{{testcase.id}}-info'>
+                    <td>{{testcase.name}}</td>
+                    <td>{% if is_due or testcase.program.program_type == "Practice" %}
+                        <a title="Click Display to see std in" id='{{testcase.id}}-linkin'
+                        href="{% url 'testcase_downloadinput' testcase.id %}"
+                            target="_blank">
+                            {{ testcase.input_files|getfilename }}</a>
+                        {% if is_moderator and not mode == 'S' %}
+                        <textarea title="Click toggle to get download link for inputfiles"
+                        style="display: none; background: black; color: white;"
+                            class="form-control" id='{{testcase.id}}-in' rows="2" cols="11"></textarea>
+                        {% else %}
+                        <textarea readonly="True" title="Click toggle to get download link for inputfiles"
+                        style="display: none; background: black; color: white;"
+                            class="form-control" id='{{testcase.id}}-in' rows="2" cols="11"></textarea>
+                        {% endif %}
+                        {% elif is_moderator and not mode == 'S' %}
+                        <a title="Click Display to see std in" id='{{testcase.id}}-linkin'
+                        href="{% url 'testcase_downloadinput' testcase.id %}"
+                            target="_blank">
+                            {{ testcase.input_files|getfilename }}</a>
+                        <textarea title="Click toggle to get download link for inputfiles"
+                        style="display: none; background: black; color: white;"
+                            class="form-control" id='{{testcase.id}}-in' rows="2" cols="11"></textarea>
+                        {% else %}
+                        File hidden before deadline
+                        {% endif %}</td>
+                    <td>{% if is_due or testcase.program.program_type == "Practice" %}
+                        <a title="Click Display to see std out" id='{{testcase.id}}-linkout'
+                        href="{% url 'testcase_downloadoutput' testcase.id %}"
+                            target="_blank">
+                            {{ testcase.output_files|getfilename }}</a>
+                        {% if is_moderator and not mode == 'S' %}
+                        <textarea title="Click toggle to get download link for outputfiles"
+                        style="display: none; background: black; color: white;"
+                            class="form-control" id='{{testcase.id}}-out' rows="2" cols="11"></textarea>
+                        {% else %}
+                        <textarea readonly="True" title="Click toggle to get download link for outputfiles"
+                        style="display: none; background: black; color: white;"
+                            class="form-control" id='{{testcase.id}}-out' rows="2" cols="11"></textarea>
+                        {% endif %}
+                        {% elif is_moderator and not mode == 'S' %}
+                        <a title="Click Display to see std out" id='{{testcase.id}}-linkout'
+                        href="{% url 'testcase_downloadoutput' testcase.id %}"
+                            target="_blank">
+                            {{ testcase.output_files|getfilename }}</a>
+                        <textarea title="Click toggle to get download link for outputfiles"
+                        style="display: none; background: black; color: white;"
+                            class="form-control" id='{{testcase.id}}-out' rows="2" cols="11"></textarea>
+                        {% else %}
+                        File hidden before deadline
+                        {% endif %}</td>
+                    <td>{% if is_moderator and not mode == 'S' %}
+                        <a href="#" class="marks" title="Click to edit marks" data-type="text" data-pk="{{testcase.id}}"
+                            data-name="testcase_marks" data-params="{csrfmiddlewaretoken:'{{csrf_token}}'}"
+                            data-url="{%url 'edit_tc_marks' %}">{{testcase.marks}}</a>
+                        {% else %}
+                        {{testcase.marks}}
+                        {% endif %}
+                    </td>
+                    {% if is_moderator and not mode == 'S' %}
+                    <td> <a title="Click to Edit testcase" class="btn btn-primary"
+                        href="{% url 'assignments_edittestcase' testcase.id %}">
+                            Edit</a></td>
+                    <td> <a title="Click to Delete testcase" class="btn btn-primary"
+                        href="{% url 'assignments_removetestcase' testcase.id %}"
+                            onclick="return confirm('Deleting this testcase will result in deleting all associated'+
+                           'results if any.' + ' \nDo you want to continue?')">
+                            Delete</a></td>
+                    {% endif %}
+                    {% if is_due or testcase.program.program_type == "Practice" %}
+                    <td>
+                        <label class="switch">
+                            <input type="checkbox" checked>
+                            <span title="Switch between download link and stdin" class="slider round"
+                            onclick="getstd('{{testcase.id}}', '{{testcase.program.id}}')"></span>
+                        </label>
+                    </td>
+                    {% elif is_moderator and not mode == 'S' %}
+                    <td>
+                        <label class="switch">
+                            <input type="checkbox" checked>
+                            <span title="Switch between download link and stdin" class="slider round"
+                            onclick="getstd('{{testcase.id}}', '{{testcase.program.id}}')"></span>
+                        </label>
+                    </td>
+                    {% endif %}
+                    <td> <a title="Go to testcase page" class="btn btn-primary"
+                        href="{%url 'assignments_detailstestcase' testcase.id %}">
+                            View</a></td>
+                    {% if is_moderator and not mode == 'S' %}
+                    <td> <input type="button" id="{{testcase.id}}-button" class="btn btn-primary"
+                                value="Save" onClick="onClickSave(this.id,{{ testcase.id}})" about="">
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<script type="text/javascript">
+    function validateForm() {
+        if ($('#infile').val() == '' && $('#txtarea').val() == '') {
+            alert('Please select a file or fill text as input');
+            return false;
+        }
+        if ($('#infile').val() != '' && $('#txtarea').val() != '') {
+            confirm("In case of both file and text is present as input file will be used by default");
+        }
+    }
+
+    function onClickSave(pressed_id, testcaseid){
+        var blist = document.getElementsByClassName("btn");
+        console.log("pressed button id is "+pressed_id);
+        var textarea_in_id = pressed_id.replace("button","in");
+        var textarea_out_id = pressed_id.replace("button","out");
+        var text_input = document.getElementById(textarea_in_id).value;
+        var text_output = document.getElementById(textarea_out_id).value;
+        if (testcaseid == null) testcaseid = ""
+        $.ajax({
+            type: 'POST',
+            url :  "/assignments/testcase/editinputfile/" + testcaseid,
+
+            data: {
+                'new_input': text_input,
+                'new_output': text_output
+            },
+
+            success: function(msg){
+                alert(msg);
+            }
+        });
+    }
+</script>
+{% if not is_moderator or mode == 'S' %}
+{% if program.program_type == "Practice" or is_due %}
+<hr>
+{% if program.is_sane and program.solution_ready and has_submitted %}
+<div>
+    <p>Here you can upload your input to check output of this section.</p>
+</div>
+<div id="checkoutput">
+    <span class="btn-group">
+        <button id="upfile" class="btn btn-primary" onclick="$('#usertext').fadeOut();$('#userinput').fadeIn()">Upload
+            input in a file</button>
+        <button id="uptext" class="btn btn-primary" onclick="$('#userinput').fadeOut();$('#usertext').fadeIn()">Upload
+            input from text box</button>
+    </span>
+    <form action="{% url 'evaluate_checkoutput' program.id %}" method="POST" enctype="multipart/form-data" target="#">
+        {% csrf_token %}
+        <div id="userinput" style="display: none;">
+            <label for="infile">
+                <h4>Select a file to upload.</h4>
+            </label>
+            <input id="infile" name="inputFile" type="file" />
+        </div>
+        <div id="usertext" style="display: none">
+            <label for="txtarea">
+                <h4>Enter your input here to check output.</h4>
+            </label><br>
+            <textarea style="background: black; color: white;" id="txtarea" name="inputText"
+            placeholder="Type your input here."
+                rows="5" cols="30"></textarea><br />
+        </div>
+        <br />
+        <input class="btn btn-info" type="submit" value="Check Output" />
+    </form>
+</div>
+{% elif not program.solution_ready %}
+<div>
+    Model Solution is not available now. You can not compare output on custom input.
+</div>
+{% else %}
+<div>
+    Upload Solution code to check output on your input to the section.
+</div>
+{% endif %}
+{% endif %}
+{% endif %}
+<script type="text/javascript">
+    function getTab(tabID) {
+        document.getElementById("id_tab1").value = tabID;
+    }
+
+    $("tr id_name").each(function () {
+        var id = $(this).attr("id");
+        $(this).parent().parent().attr("data-feed-id", id);
+    });
+
+    function disableSubmit() {
+        if ($("#id_name").val() != "" && $("#id_deadline").val() != "" &&
+            $("#id_freezing_deadline").val() != "" && $("#id_publish_on").val() != "") {
+            $("#id_submit").removeAttr("disabled");
+            $("#id_submit").css('background-color', "#8BC34A");
+
+        }
+        else {
+            $("#id_submit").attr("disabled", true);
+            $("#id_submit").css('background-color', "#333");
+        }
+    }
+    function disabledurationFields() {
+        $("#id_duration").parent().hide();
+    }
+
+    $(document).ready(function () {
+        $('#id_student_program_files').popover();
+        $('#id_duration').disabled = true;
+        $("#id_duration").parent().hide();
+        $("#id_freezing_duration").parent().hide();
+        $('#id_freezing_duration').disabled = true;
+        $("#id_type_of_lab").parent().hide();
+        $("#id_publish_type").val("Scheduled");
+        $("#id_publish_type").parent().hide();
+        $("#id_only_uploads").parent().hide();
+
+        if ($("#id_only_uploads").is(":checked")) {
+            $("#id_programmingCheck").attr("checked", false)
+        }
+        else {
+            $("#id_programmingCheck").attr("checked", true)
+        }
+
+        $('#id_exam').change(function () {
+
+            var bool = true;
+            $("#id_type_of_lab").val("Lab");
+            if (document.getElementById("id_exam").checked) {
+                bool = false;
+                $("#id_type_of_lab").val("Exam");
+            }
+            if (($(this).attr("name") == "id_exam")) {
+                $("#id_timeduration").attr("disabled", bool);
+                $("#id_exam_group_id").attr("disabled", bool);
+                $("#id_late_duration").attr("disabled", bool);
+            }
+        });
+
+        if ($("#id_type_of_lab").val() == "Exam") {
+            $("#id_exam").prop("checked", true);
+            $("#id_timeduration").attr("disabled", false);
+            $("#id_exam_group_id").attr("disabled", false);
+            $("#id_late_duration").attr("disabled", false);
+            $("#id_type_of_lab").val("Exam");
+
+        } else {
+            $("#id_timeduration").attr("disabled", true);
+            $("#id_exam_group_id").attr("disabled", true);
+            $("#id_late_duration").attr("disabled", true);
+            $("#id_exam").prop("checked", false);
+
+        }
+
+        if (document.getElementById("id_correctness").checked) {
+            $("#id_order").parent().show();
+            $("#id_error").parent().show();
+        } else {
+            $("#id_order").parent().hide();
+            $("#id_error").parent().hide();
+
+        }
+
+        $('#id_correctness').click(function () {
+
+            if (($(this).attr("name") == "correctness")) {
+                $("#id_order").parent().toggle();
+                $("#id_error").parent().toggle();
+            }
+        });
+
+        if (document.getElementById("id_programmingCheck").checked) {
+            var bool = false;
+            var color = '#fff';
+            $("#togglecontainer").css('background-color', color);
+            $("#id_student_program_files").attr('disabled', bool);
+            $("#id_program_language").attr("disabled", bool);
+            $("#id_helper_code").attr("disabled", bool);
+            $("#id_force_upload").attr("disabled", bool);
+        } else {
+            var bool = true;
+            var color = '#f5f5f5';
+            $("#togglecontainer").css('background-color', color);
+            $("#id_student_program_files").attr('disabled', bool);
+            $("#id_program_language").attr("disabled", bool);
+            $("#id_helper_code").attr("disabled", bool);
+            $("#id_force_upload").attr("disabled", bool);
+        }
+
+        $('#id_programmingCheck').click(function () {
+            //var ThisIt = $(this);
+            var bool = true;
+            var color = '#f5f5f5';
+            if (document.getElementById("id_programmingCheck").checked) {
+                bool = false;
+                color = '#fff';
+            }
+
+            if (($(this).attr("name") == "programmingCheck")) {
+                $("#togglecontainer").css('background-color', color);
+                $("#id_student_program_files").attr('disabled', bool);
+                $("#id_program_language").attr("disabled", bool);
+                $("#id_helper_code").attr("disabled", bool);
+                $("#id_force_upload").attr("disabled", bool);
+                $("#id_only_uploads").attr("checked", bool);
+
+            }
+        });
+
+        $('#id_type_of_allocation').change(function () {
+            disableAllocationFields();
+            if ($("#id_type_of_allocation_1").is(":checked")) {
+                $("#id_previous_allocation_policy").parent().show()
+            }
+            else if ($("#id_type_of_allocation_2").is(":checked")) {
+                $("#id_ta_allocation_document").parent().show()
+            }
+        });
+
+        $('#id_program_language').change(function () {
+            // disableFormFields();
+            var ThisIt = $(this);
+            if (ThisIt.val() != 'Others') {
+                if (ThisIt.val() == 'Simplecpp') {
+                    $("#id_graphics_program").parent().show();
+                    $("#id_graphics_program").attr("disabled", false);
+                    $("#id_bulk_add").attr("disabled", false);
+                    $("#id_execution_time_allowed").attr("disabled", false);
+                    $("#id_indentation").attr("disabled", false);
+                    $("#id_correctness").attr("disabled", false);
+                }
+                else {
+                    $("#id_bulk_add").attr("disabled", false);
+                    $("#id_execution_time_allowed").attr("disabled", false);
+                    $("#id_indentation").attr("disabled", false);
+                    $("#id_correctness").attr("disabled", false);
+                    $("#id_graphics_program").attr("disabled", true);
+                }
+            }
+            else {
+                $("#id_bulk_add").attr("disabled", true);
+                $("#id_execution_time_allowed").attr("disabled", true);
+                $("#id_indentation").attr("disabled", true);
+                $("#id_correctness").attr("disabled", true);
+                $("#id_graphics_program").attr("disabled", true);
+
+            }
+
+        });
+
+        //to ensure mandatory fields are provided before enabling the publish button
+        $("input[type='text']").on("blur", function () {
+
+            disableSubmit();
+        });
+        $("#id_description").on("blur", function () {
+
+            disableSubmit();
+        });
+        $("#id_publish_on").on("blur", function () {
+
+            disableSubmit();
+        });
+
+        if ($("#id_tab1").val() == "1") {
+            $('.nav-tabs a[href="#basicDetails"]').tab('show');
+        } else if ($("#id_tab1").val() == "2") {
+            $('.nav-tabs a[href="#advDetails"]').tab('show');
+        }
+    });
+
+    disableFormFields();
+    disableAllocationFields();
+    disableSubmit();
+</script>
+{% endblock %}
